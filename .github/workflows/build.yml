@@ -1,6 +1,6 @@
 name: Build
 
-on: [push, pull_request, workflow_dispatch]
+on: [push, pull_request]
 
 jobs:
   build-current-toolchain:
@@ -14,10 +14,9 @@ jobs:
       matrix:
         toolchain:
         - { name: 'MSVC (32-bit, Release)',  shell: 'sh',  setup-cmake: true, setup-ninja: true, setup-msvc: true, vc-arch: 'amd64_x86', dx5-libs: true,   d3drm-from-wine: false, build-type: 'Release' }
-        - { name: 'MSVC (32-bit, Debug)',  shell: 'sh',  setup-cmake: true, setup-ninja: true, setup-msvc: true, vc-arch: 'amd64_x86', dx5-libs: true,   d3drm-from-wine: false, build-type: 'Debug' }
+        - { name: 'MSVC (64-bit, Release, Optimized)', shell: 'sh', setup-cmake: true, setup-ninja: true, setup-msvc: true, vc-arch: 'amd64', dx5-libs: false, d3drm-from-wine: true, build-type: 'Release', cpu-flags: '-march=znver4 -O3 -mavx -mavx2 -mavx512 -mfma -msse -msse2 -msse3 -msse4.1 -msse4.2 -msha -mssse3' }
         - { name: 'MSVC (64-bit, Debug)',  shell: 'sh',  setup-cmake: true, setup-ninja: true, setup-msvc: true, vc-arch: 'amd64',     dx5-libs: false,  d3drm-from-wine: true, build-type: 'Debug' }
-        - { name: 'MSVC (64-bit, Release, Ryzen 5 7600)', shell: 'sh', setup-cmake: true, setup-ninja: true, setup-msvc: true, vc-arch: 'amd64', dx5-libs: false, d3drm-from-wine: true, build-type: 'Release', cpu-flags: '-march=znver4 -mavx512f -mavx2 -mfma -maes -msha -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -msse4a' }
-        
+
     steps:
       - name: Setup vcvars
         if: matrix.toolchain.setup-msvc
@@ -35,8 +34,10 @@ jobs:
             -DCMAKE_BUILD_TYPE=${{ matrix.toolchain.build-type }} \
             -DISLE_USE_DX5=${{ matrix.toolchain.dx5-libs }} \
             -DISLE_D3DRM_FROM_WINE=${{ matrix.toolchain.d3drm-from-wine }} \
-            -DCMAKE_CXX_FLAGS="${{ matrix.toolchain.cpu-flags }}" \
-            -Werror=dev
+            -DENABLE_CLANG_TIDY=${{ !!matrix.toolchain.clang-tidy }} \
+            -DISLE_WERROR=${{ !!matrix.toolchain.werror }} \
+            -Werror=dev \
+            -DCMAKE_CXX_FLAGS="${{ matrix.toolchain.cpu-flags }}"
           cmake --build build -- -k0
 
       - name: Make Artifact Archive
@@ -46,10 +47,10 @@ jobs:
           7z a "isle-portable (${{ matrix.toolchain.name }}).zip" \
               ISLE.EXE LEGO1.DLL SDL3.dll
 
-      - name: Upload Build Artifacts (MSVC (64-bit, Release, Ryzen 5 7600))
-        if: ${{ matrix.toolchain.name == 'MSVC (64-bit, Release, Ryzen 5 7600)' }}
+      - name: Upload Build Artifacts (MSVC (64-bit, Optimized))
+        if: ${{ matrix.toolchain.name == 'MSVC (64-bit, Release, Optimized)' }}
         uses: actions/upload-artifact@v4
         with:
-          name: msvc64-ryzen-artifacts-${{ matrix.toolchain.name }}
+          name: msvc64-optimized-artifacts
           path: |
             build/isle-portable (${{ matrix.toolchain.name }}).zip
